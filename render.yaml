@@ -1,9 +1,6 @@
 services:
   - type: web
-    name: air-canvas
-    runtime: python
-    buildCommand: ""
-    startCommand: gunicorn app:app
-    envVars:
-      - key: PORT
-        value: 10000
+    name: your-service-name
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn app:app"
