@@ -1,17 +1,13 @@
 
-
-#        FINAL CODE
-
-
 import cv2
 import mediapipe as mp
 import numpy as np
 from collections import deque
 from flask import Flask, render_template, Response, request, redirect
 import time
+import os  # ✅ ADDED
 
 app = Flask(__name__)
-app.run(host='0.0.0.0', port=10000)
 
 # MediaPipe Hands setup
 mp_hands = mp.solutions.hands
@@ -68,12 +64,6 @@ def paintboard_feed():
     paintboard = buffer.tobytes()
     return Response(paintboard, mimetype='image/jpeg')
 
-# @app.route('/select_color/<int:color_index>', methods=['POST'])
-# def select_color(color_index):
-#     global colorIndex
-#     colorIndex = color_index  # Update selected color
-#     return '', 204
-
 @app.route('/toggle_eraser', methods=['POST'])
 def toggle_eraser():
     global is_eraser_active
@@ -90,7 +80,7 @@ def update_finger_position():
 def gen_frames():
     global paintWindow
     global drawing_active
-    global wpoints  # Make sure wpoints is defined globally
+    global wpoints
 
     global hand_detection_buffer
     global last_hand_count
@@ -111,47 +101,44 @@ def gen_frames():
         hand_count = 0  # Count how many hands are detected
 
         if results.multi_hand_landmarks:
-            hand_count = len(results.multi_hand_landmarks)  # Update hand count
+            hand_count = len(results.multi_hand_landmarks)
 
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                
-                thumb_tip = hand_landmarks.landmark[4]  
-                index_tip = hand_landmarks.landmark[8]  
+
+                thumb_tip = hand_landmarks.landmark[4]
+                index_tip = hand_landmarks.landmark[8]
                 h, w, _ = frame.shape
                 finger_x, finger_y = int(index_tip.x * w), int(index_tip.y * h)
 
-                # Check if "OK" sign is made (thumb tip close to index tip)
+                # Check for "OK" sign
                 distance = np.sqrt((thumb_tip.x - index_tip.x) ** 2 + (thumb_tip.y - index_tip.y) ** 2)
-                if distance < 0.05:  
-                    drawing_active = True  # Draw when "OK" sign detected
+                if distance < 0.05:
+                    drawing_active = True
                 else:
-                    drawing_active = False  # Stop drawing when "OK" sign not detected
+                    drawing_active = False
 
-                # Handle drawing
                 if drawing_active:
-                    wpoints.append(deque(maxlen=1024))  # Start a new line
+                    wpoints.append(deque(maxlen=1024))
                     wpoints[-1].appendleft((finger_x, finger_y))
                 else:
                     wpoints[-1].appendleft((finger_x, finger_y))
 
-        # Check if two hands are consistently detected
+        # Handle erasing if two hands are detected consistently
         if hand_count == 2:
             if last_hand_count == 2:
-                hand_detection_buffer += 1  # Increment buffer if two hands detected consistently
+                hand_detection_buffer += 1
             else:
-                hand_detection_buffer = 0  # Reset buffer if the count changes
+                hand_detection_buffer = 0
         else:
-            hand_detection_buffer = 0  # Reset buffer if hand count is less than 2
+            hand_detection_buffer = 0
 
-        # Only clear when two hands are detected consistently for a short period
-        if hand_detection_buffer > 10:  # 10 frames (about 1/2 second at ~20 FPS)
-            wpoints = [deque(maxlen=1024)]  # Reset the drawing points
-            paintWindow = np.ones((471, 636, 3)) * 255  # Clear the paintboard (reset canvas)
+        if hand_detection_buffer > 10:
+            wpoints = [deque(maxlen=1024)]
+            paintWindow = np.ones((471, 636, 3)) * 255
 
-        last_hand_count = hand_count  # Store the last hand count for comparison
+        last_hand_count = hand_count
 
-        # Draw on the paintboard
         for j in range(len(wpoints)):
             for k in range(1, len(wpoints[j])):
                 if wpoints[j][k - 1] is None or wpoints[j][k] is None:
@@ -165,9 +152,6 @@ def gen_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
-
 if __name__ == '__main__':
-    port = int(os.environ.get("port", 10000))
-    app.run(host='0.0.0.0',port=port)
-
-
+    port = int(os.environ.get("PORT", 10000))  # ✅ Corrected key name to "PORT"
+    app.run(host='0.0.0.0', port=port)
