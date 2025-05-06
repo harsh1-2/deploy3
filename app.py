@@ -1,40 +1,31 @@
-
 import cv2
 import mediapipe as mp
 import numpy as np
 from collections import deque
 from flask import Flask, render_template, Response, request, redirect
-import time
-import os  # ✅ ADDED
+import os
 
 app = Flask(__name__)
 
-# MediaPipe Hands setup
+# MediaPipe setup
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
-
-# Initialize points
-wpoints = [deque(maxlen=1024)]  # White color for drawing
-
-# White color definition
-red_color = (0, 0, 255)
-paintWindow = np.ones((471, 636, 3)) * 255  # White canvas
-
-# MediaPipe hands initialization
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+
+# Drawing variables
+wpoints = [deque(maxlen=1024)]
+red_color = (0, 0, 255)
+paintWindow = np.ones((471, 636, 3), dtype=np.uint8) * 255
+
+drawing_active = False
+hand_detection_buffer = 0
+last_hand_count = 0
 
 # Open webcam
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("Error: Could not access the camera.")
     exit()
-
-# Drawing state flags
-drawing_active = False  # Flag for when "OK" sign is detected
-
-# Buffer for hand detection consistency
-hand_detection_buffer = 0
-last_hand_count = 0
 
 @app.route('/')
 def index():
@@ -49,7 +40,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        return redirect('/index2')  # Redirect to video feed after login
+        return redirect('/index2')
     return render_template('index.html')
 
 @app.route('/video_feed')
@@ -60,14 +51,13 @@ def video_feed():
 def paintboard_feed():
     ret, buffer = cv2.imencode('.jpg', paintWindow)
     if not ret:
-        return '', 204  # No content if encoding fails
-    paintboard = buffer.tobytes()
-    return Response(paintboard, mimetype='image/jpeg')
+        return '', 204
+    return Response(buffer.tobytes(), mimetype='image/jpeg')
 
 @app.route('/toggle_eraser', methods=['POST'])
 def toggle_eraser():
     global is_eraser_active
-    is_eraser_active = not is_eraser_active  # Toggle eraser state
+    is_eraser_active = not is_eraser_active
     return '', 204
 
 @app.route('/update_finger_position', methods=['POST'])
@@ -78,27 +68,20 @@ def update_finger_position():
     return '', 204
 
 def gen_frames():
-    global paintWindow
-    global drawing_active
-    global wpoints
-
-    global hand_detection_buffer
-    global last_hand_count
+    global paintWindow, drawing_active, wpoints
+    global hand_detection_buffer, last_hand_count
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Error: Failed to capture frame.")
             break
 
         frame = cv2.flip(frame, 1)
-
-        # MediaPipe hand detection
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(rgb_frame)
 
         finger_x, finger_y = None, None
-        hand_count = 0  # Count how many hands are detected
+        hand_count = 0
 
         if results.multi_hand_landmarks:
             hand_count = len(results.multi_hand_landmarks)
@@ -111,7 +94,6 @@ def gen_frames():
                 h, w, _ = frame.shape
                 finger_x, finger_y = int(index_tip.x * w), int(index_tip.y * h)
 
-                # Check for "OK" sign
                 distance = np.sqrt((thumb_tip.x - index_tip.x) ** 2 + (thumb_tip.y - index_tip.y) ** 2)
                 if distance < 0.05:
                     drawing_active = True
@@ -124,7 +106,6 @@ def gen_frames():
                 else:
                     wpoints[-1].appendleft((finger_x, finger_y))
 
-        # Handle erasing if two hands are detected consistently
         if hand_count == 2:
             if last_hand_count == 2:
                 hand_detection_buffer += 1
@@ -135,7 +116,7 @@ def gen_frames():
 
         if hand_detection_buffer > 10:
             wpoints = [deque(maxlen=1024)]
-            paintWindow = np.ones((471, 636, 3)) * 255
+            paintWindow = np.ones((471, 636, 3), dtype=np.uint8) * 255
 
         last_hand_count = hand_count
 
@@ -147,11 +128,11 @@ def gen_frames():
                 cv2.line(paintWindow, wpoints[j][k - 1], wpoints[j][k], red_color, 2)
 
         ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-
+        if not ret:
+            continue
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n\r\n')
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))  # ✅ Corrected key name to "PORT"
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
