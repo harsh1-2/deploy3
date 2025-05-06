@@ -165,7 +165,9 @@ def gen_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("port", 10000))
+    app.run(host='0.0.0.0',port=port)
 
 
