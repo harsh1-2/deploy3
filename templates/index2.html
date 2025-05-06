@@ -1,0 +1,55 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Video Feed and Paintboard</title>
+    <style>
+       
+        .container { display: flex; justify-content: space-around; }
+        #video-feed, #paintboard { max-width: 100%; border: 1px solid black; }
+        /* .buttons-container { position: absolute; top: 10px; left: 40px; z-index: 10; }
+        .button { padding: 10px; margin: 5px; cursor: pointer; }
+        .color-button { width: 50px; height: 30px; margin-right: 50px; } */
+    </style>
+</head>
+<body>
+    <h1>Live Video Feed and Paintboard</h1>
+    <!-- <button type="submit" class="logout-btn">Log out</button> -->
+    <div class="container">
+     
+        <div>
+            <h2>Live Video</h2>
+            <div style="position:relative;">
+                <img src="{{ url_for('video_feed') }}" id="video-feed" alt="Live Video Feed">
+                
+            </div>
+        </div>
+
+       
+        <div>
+            <h2>Paintboard</h2>
+            <img src="{{ url_for('paintboard_feed') }}" id="paintboard" alt="Live Paintboard">
+        </div>
+    </div>
+
+    <script>
+        let selectedColor = 0;
+
+        function refreshPaintboard() {
+            const paintboard = document.getElementById('paintboard');
+            paintboard.src = "{{ url_for('paintboard_feed') }}?t=" + new Date().getTime();
+        }
+
+        setInterval(refreshPaintboard, 100);
+        function selectColor(colorIndex) {
+        selectedColor = colorIndex;
+        fetch('/select_color/${colorIndex}', { method: "POST" });
+      }
+
+     </script>
+    <!-- <script src="script.js"></script> -->
+</body>
+</html>
